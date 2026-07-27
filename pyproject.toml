@@ -1,0 +1,47 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "subgen"
+version = "0.1.0"
+description = "Local video/audio to SRT and VTT subtitle CLI powered by faster-whisper."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "faster-whisper>=1.0,<2.0",
+    "protobuf>=3.20,<6.0",
+    "rich>=13.7,<14.0",
+    "typer[all]>=0.12,<1.0",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=7.4,<9.0",
+]
+ui = [
+    "streamlit>=1.37,<2.0",
+]
+translate = [
+    "sentencepiece>=0.2,<1.0",
+    "torch>=2.2,<3.0",
+    "transformers>=4.40,<5.0",
+]
+all = [
+    "sentencepiece>=0.2,<1.0",
+    "streamlit>=1.37,<2.0",
+    "torch>=2.2,<3.0",
+    "transformers>=4.40,<5.0",
+]
+
+[project.scripts]
+subgen = "subgen.cli:main"
+subgen-download-model = "subgen.cli:download_model_main"
+subgen-ui = "subgen.ui:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
