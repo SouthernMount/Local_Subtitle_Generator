@@ -4,6 +4,12 @@
 并在写入 `.srt` 和 `.vtt` 字幕文件前，将非中文语音翻译为简体中文。
 媒体文件只在本机处理，不会上传。
 
+## 技术说明
+
+本项目使用 Whisper 模型进行语音识别和字幕文本提取，使用 NLLB 模型将
+非中文识别结果翻译为简体中文。项目开发过程中使用了 Codex 和 DeepSeek
+进行辅助编程。
+
 ## Windows 快速开始
 
 1. 安装 Miniconda/Anaconda，或安装 Python 3.12+。
@@ -17,9 +23,10 @@
 `models/nllb-200-distilled-600M`。如果你想使用其他缓存位置，可以自行设置
 `HF_HOME`。
 
-首次部署需要联网，并且需要为模型文件预留磁盘空间。翻译模型约 2.4 GB。
+首次部署需要联网，并且需要为模型文件预留磁盘空间。翻译模型约 4.6 GB。
 默认 Whisper 识别模型是 `small`；之后也可以在 UI 或 CLI 中选择 `medium`
-以及其他 Whisper 模型。
+以及其他 Whisper 模型。部署 `large-v3` 识别模型时，需额外预留 2.9 GB
+以上磁盘空间。
 
 ## 手动安装
 
@@ -98,6 +105,12 @@ subgen-download-model --model small --device cpu --skip-translation-model
 subgen-download-model --model medium --device cpu --skip-translation-model
 ```
 
+准备 `large-v3` 模型时，请先确认至少有 2.9 GB 以上可用磁盘空间：
+
+```bash
+subgen-download-model --model large-v3 --device cpu --skip-translation-model
+```
+
 下载或修复本地翻译模型：
 
 ```bash
@@ -152,6 +165,13 @@ Local subtitle generation for video and audio files. The app uses
 Simplified Chinese before writing `.srt` and `.vtt` files. Media files are
 processed locally and are not uploaded.
 
+## Tech Notes
+
+This project uses Whisper models for speech recognition and subtitle text
+extraction, and uses the NLLB model to translate non-Chinese recognition results
+into Simplified Chinese. Codex and DeepSeek were used as programming assistants
+during development.
+
 ## Quick Start on Windows
 
 1. Install either Miniconda/Anaconda or Python 3.12+.
@@ -166,8 +186,9 @@ it creates a project-local `.venv` instead. Model cache files default to
 different cache location.
 
 First-time setup requires network access and disk space for model files. The
-translation model is about 2.4 GB. The default Whisper model is `small`; `medium`
-and other Whisper models can be selected later from the UI or CLI.
+translation model is about 4.6 GB. The default Whisper model is `small`; `medium`
+and other Whisper models can be selected later from the UI or CLI. Deploying the
+`large-v3` recognition model requires more than 2.9 GB of additional disk space.
 
 ## Manual Setup
 
@@ -244,6 +265,13 @@ Prepare a higher-quality model:
 
 ```bash
 subgen-download-model --model medium --device cpu --skip-translation-model
+```
+
+Prepare the `large-v3` model after confirming more than 2.9 GB of available
+disk space:
+
+```bash
+subgen-download-model --model large-v3 --device cpu --skip-translation-model
 ```
 
 Download or repair the local translation model:
