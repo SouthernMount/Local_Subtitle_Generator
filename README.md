@@ -28,6 +28,9 @@
 以及其他 Whisper 模型。部署 `large-v3` 识别模型时，需额外预留 2.9 GB
 以上磁盘空间。
 
+默认配置使用 CPU 模式，兼容性更好但速度较慢。如果希望更快处理视频，请查看
+下方“GPU 模式”部分，并按说明安装额外的 NVIDIA/CUDA 依赖。
+
 ## 手动安装
 
 使用 Conda：
@@ -130,6 +133,63 @@ python scripts/download_models.py --force
 CUDA 驱动、支持 CUDA 的 PyTorch，以及支持 CUDA 的
 faster-whisper/ctranslate2 安装。
 
+CPU 模式速度较慢。使用 `small` 模型时，粗略处理时长如下：
+
+- 30 分钟视频：约 20-60 分钟
+- 60 分钟视频：约 40-120 分钟
+- 120 分钟视频：约 1.5-4 小时
+
+GPU 模式通常能够大幅加速，但加速幅度取决于显卡型号、显存、CUDA 环境、
+模型大小、视频内容和翻译阶段耗时，因此本项目不承诺固定的时间减少百分比。
+默认一键安装以 CPU 兼容性为优先：不会自动安装 NVIDIA 驱动、CUDA 工具链、
+CUDA 专用 PyTorch 或其他完整 GPU 运行环境；Whisper/NLLB 模型权重本身不区分
+CPU 版和 GPU 版，是否使用 GPU 主要取决于本机依赖环境和启动参数。
+
+从零配置 GPU 模式：
+
+1. 确认电脑有 NVIDIA 显卡，并安装最新版 NVIDIA 驱动。
+2. 在 PowerShell 或命令提示符运行 `nvidia-smi`。如果能看到显卡和驱动信息，
+   说明驱动可用；如果命令不存在或报错，请先修复显卡驱动。
+3. 先运行 `setup.bat` 完成默认 CPU 环境部署。
+4. 激活项目环境：
+
+```bash
+conda activate subgen
+```
+
+如果你是无 Conda 安装，由 `setup.bat` 创建了 `.venv`，则运行：
+
+```bash
+.\.venv\Scripts\Activate.ps1
+```
+
+5. 打开 PyTorch 官方安装选择器，选择 Windows、Pip、Python 和与你显卡驱动匹配
+   的 CUDA 版本，然后运行页面给出的安装命令。示例：
+
+```bash
+python -m pip install --upgrade torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
+```
+
+如果官方页面给出的 CUDA 版本不同，请以官方页面命令为准。
+
+6. 安装 CUDA 12 对应的 cuBLAS 和 cuDNN 9 运行库。faster-whisper 使用的
+   CTranslate2 GPU 后端需要这些 NVIDIA 动态库；Windows 用户可以按 NVIDIA
+   官方说明安装 CUDA/cuDNN，或使用 faster-whisper 文档中提到的 Windows
+   运行库打包方式。安装后请确保相关 DLL 所在目录已加入 `PATH`。
+7. 验证 PyTorch 能看到 GPU：
+
+```bash
+python -c "import torch; print(torch.cuda.is_available()); print(torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'CUDA unavailable')"
+```
+
+8. 验证 faster-whisper GPU 能加载：
+
+```bash
+python -c "from faster_whisper import WhisperModel; WhisperModel('small', device='cuda', compute_type='float16'); print('faster-whisper CUDA OK')"
+```
+
+9. 启动 UI 后在侧边栏选择 `CUDA`，或从命令行运行：
+
 ```bash
 subgen sample.mp4 --device cuda --compute-type float16
 subgen sample.mp4 --device cuda --compute-type int8_float16
@@ -189,6 +249,10 @@ First-time setup requires network access and disk space for model files. The
 translation model is about 4.6 GB. The default Whisper model is `small`; `medium`
 and other Whisper models can be selected later from the UI or CLI. Deploying the
 `large-v3` recognition model requires more than 2.9 GB of additional disk space.
+
+The default configuration uses CPU mode, which is broadly compatible but slow.
+For faster processing, see the "GPU Mode" section and install the additional
+NVIDIA/CUDA dependencies described there.
 
 ## Manual Setup
 
@@ -292,6 +356,70 @@ The default translation model is resolved in this order:
 CPU mode is the default and is recommended for broad compatibility. GPU mode
 requires an NVIDIA GPU, a working CUDA driver, CUDA-capable PyTorch, and a
 CUDA-capable faster-whisper/ctranslate2 installation.
+
+CPU mode is slow. With the `small` model, rough processing times are:
+
+- 30-minute video: about 20-60 minutes
+- 60-minute video: about 40-120 minutes
+- 120-minute video: about 1.5-4 hours
+
+GPU mode can usually speed processing up substantially, but the actual speedup
+depends on the GPU, VRAM, CUDA environment, model size, video content, and
+translation workload, so this project does not promise a fixed percentage
+reduction. The default one-click setup prioritizes CPU compatibility: it does
+not automatically install NVIDIA drivers, the CUDA toolkit, CUDA-specific
+PyTorch builds, or a complete GPU runtime. Whisper/NLLB model weights are not
+separate CPU and GPU variants; GPU usage mainly depends on local dependencies
+and runtime options.
+
+GPU setup from scratch:
+
+1. Confirm that the computer has an NVIDIA GPU and install the latest NVIDIA
+   driver.
+2. Run `nvidia-smi` in PowerShell or Command Prompt. If it shows GPU and driver
+   information, the driver is available; if it is missing or errors, fix the
+   NVIDIA driver first.
+3. Run `setup.bat` first to complete the default CPU-compatible setup.
+4. Activate the project environment:
+
+```bash
+conda activate subgen
+```
+
+If `setup.bat` created a `.venv` because Conda was unavailable, run:
+
+```bash
+.\.venv\Scripts\Activate.ps1
+```
+
+5. Open the official PyTorch installation selector, choose Windows, Pip, Python,
+   and the CUDA version supported by your driver, then run the command shown by
+   that page. Example:
+
+```bash
+python -m pip install --upgrade torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
+```
+
+If the official page shows a different CUDA version, use the official command.
+
+6. Install the CUDA 12 cuBLAS and cuDNN 9 runtime libraries. The CTranslate2 GPU
+   backend used by faster-whisper needs these NVIDIA dynamic libraries. On
+   Windows, install CUDA/cuDNN using NVIDIA's official instructions, or use the
+   Windows runtime package option mentioned by the faster-whisper documentation.
+   Make sure the DLL directory is included in `PATH`.
+7. Verify that PyTorch can access the GPU:
+
+```bash
+python -c "import torch; print(torch.cuda.is_available()); print(torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'CUDA unavailable')"
+```
+
+8. Verify that faster-whisper can load on GPU:
+
+```bash
+python -c "from faster_whisper import WhisperModel; WhisperModel('small', device='cuda', compute_type='float16'); print('faster-whisper CUDA OK')"
+```
+
+9. Start the UI and select `CUDA` in the sidebar, or run from the command line:
 
 ```bash
 subgen sample.mp4 --device cuda --compute-type float16

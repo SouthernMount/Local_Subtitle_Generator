@@ -4,6 +4,7 @@ __pycache__/
 .venv/
 venv/
 .cache/
+.conda/
 dist/
 build/
 *.egg-info/

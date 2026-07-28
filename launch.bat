@@ -6,6 +6,9 @@ cd /d "%~dp0"
 set "CONDA_ENV=subgen"
 set "SUBGEN_URL=http://localhost:8501"
 set "HF_HOME=%CD%\.cache\huggingface"
+set "CONDA_PKGS_DIRS=%CD%\.conda\pkgs"
+set "CONDA_ENVS_PATH=%CD%\.conda\envs"
+set "CONDA_NOTICES=false"
 
 echo Starting local Subtitle Generator...
 echo URL: %SUBGEN_URL%
@@ -31,27 +34,23 @@ exit /b 0
 :find_python
 set "PYTHON_EXE="
 call :find_conda
-if defined CONDA_CMD (
-    call :resolve_conda_activate
-    if defined CONDA_ACTIVATE (
-        call "%CONDA_ACTIVATE%" "%CONDA_ENV%" >nul 2>nul
-        if not errorlevel 1 (
-            set "PYTHON_EXE=python"
-            exit /b 0
-        )
-    )
+if not defined CONDA_CMD goto :find_venv_python
+call :resolve_conda_activate
+if not defined CONDA_ACTIVATE goto :find_venv_python
+call "%CONDA_ACTIVATE%" "%CONDA_ENV%" >nul 2>nul
+if errorlevel 1 goto :find_venv_python
+for /f "delims=" %%p in ('where python 2^>nul') do (
+    if not defined PYTHON_EXE set "PYTHON_EXE=%%p"
 )
+if defined PYTHON_EXE exit /b 0
+
+:find_venv_python
 if exist ".venv\Scripts\python.exe" (
     set "PYTHON_EXE=%CD%\.venv\Scripts\python.exe"
-)
+    )
 exit /b 0
 
 :resolve_conda_activate
-set "CONDA_ACTIVATE="
-for /f "delims=" %%b in ('call "%CONDA_CMD%" info --base 2^>nul') do (
-    if not defined CONDA_ACTIVATE set "CONDA_ACTIVATE=%%b\Scripts\activate.bat"
-)
-if defined CONDA_ACTIVATE if exist "%CONDA_ACTIVATE%" exit /b 0
 set "CONDA_ACTIVATE="
 for %%d in (
     "%USERPROFILE%\miniconda3"

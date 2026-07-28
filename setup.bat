@@ -5,6 +5,9 @@ cd /d "%~dp0"
 
 set "CONDA_ENV=subgen"
 set "HF_HOME=%CD%\.cache\huggingface"
+set "CONDA_PKGS_DIRS=%CD%\.conda\pkgs"
+set "CONDA_ENVS_PATH=%CD%\.conda\envs"
+set "CONDA_NOTICES=false"
 set "PIP_DISABLE_PIP_VERSION_CHECK=1"
 
 echo ============================================
@@ -24,6 +27,10 @@ if defined CONDA_CMD (
         goto :setup_ready
     )
     call :setup_conda
+    if errorlevel 1 (
+        echo Conda setup failed. Falling back to a project-local .venv.
+        call :setup_venv
+    )
 ) else (
     echo Conda was not found. Falling back to a project-local .venv.
     call :setup_venv
@@ -32,10 +39,15 @@ if defined CONDA_CMD (
 if errorlevel 1 goto :failed
 
 echo.
-echo Installing Subtitle Generator dependencies...
-call "%PYTHON_EXE%" -m pip install --upgrade pip
-if errorlevel 1 goto :failed
-call "%PYTHON_EXE%" -m pip install --prefer-binary -e ".[ui,translate,test]"
+call :install_dependencies
+if errorlevel 1 (
+    if "%ENV_KIND%"=="conda" (
+        echo Conda package installation failed. Falling back to a project-local .venv.
+        call :setup_venv
+        if errorlevel 1 goto :failed
+        call :install_dependencies
+    )
+)
 if errorlevel 1 goto :failed
 
 echo.
@@ -84,11 +96,6 @@ exit /b 0
 
 :resolve_conda_activate
 set "CONDA_ACTIVATE="
-for /f "delims=" %%b in ('call "%CONDA_CMD%" info --base 2^>nul') do (
-    if not defined CONDA_ACTIVATE set "CONDA_ACTIVATE=%%b\Scripts\activate.bat"
-)
-if defined CONDA_ACTIVATE if exist "%CONDA_ACTIVATE%" exit /b 0
-set "CONDA_ACTIVATE="
 for %%d in (
     "%USERPROFILE%\miniconda3"
     "%USERPROFILE%\anaconda3"
@@ -105,21 +112,38 @@ for %%d in (
 exit /b 0
 
 :setup_conda
-call "%CONDA_CMD%" env list | findstr /r /c:"^%CONDA_ENV%[ ]" >nul 2>nul
+set "ENV_KIND=conda"
+if not exist "logs" mkdir "logs"
+set "CONDA_ENV_EXISTS="
+call "%CONDA_CMD%" env list > "%TEMP%\subgen-conda-envs.txt" 2>nul
+findstr /r /c:"^%CONDA_ENV%[ ]" "%TEMP%\subgen-conda-envs.txt" >nul 2>nul
 if errorlevel 1 (
     echo Creating Conda environment: %CONDA_ENV%
-    call "%CONDA_CMD%" env create -f environment.yml
+    call "%CONDA_CMD%" env create -f environment.yml > "logs\setup-conda.log" 2>&1
 ) else (
+    set "CONDA_ENV_EXISTS=1"
     echo Updating Conda environment: %CONDA_ENV%
-    call "%CONDA_CMD%" env update -n "%CONDA_ENV%" -f environment.yml --prune
+    call "%CONDA_CMD%" env update -n "%CONDA_ENV%" -f environment.yml --prune > "logs\setup-conda.log" 2>&1
 )
-if errorlevel 1 exit /b 1
+if errorlevel 1 (
+    if defined CONDA_ENV_EXISTS (
+        echo Conda environment update failed. Using the existing %CONDA_ENV% environment.
+        echo Details were saved to logs\setup-conda.log.
+    ) else (
+        exit /b 1
+    )
+)
 call "%CONDA_ACTIVATE%" "%CONDA_ENV%"
 if errorlevel 1 exit /b 1
-set "PYTHON_EXE=python"
+set "PYTHON_EXE="
+for /f "delims=" %%p in ('where python 2^>nul') do (
+    if not defined PYTHON_EXE set "PYTHON_EXE=%%p"
+)
+if not defined PYTHON_EXE exit /b 1
 exit /b 0
 
 :setup_venv
+set "ENV_KIND=venv"
 set "BASE_PYTHON="
 py -3.12 -c "import sys; raise SystemExit(sys.version_info < (3, 12))" >nul 2>nul
 if not errorlevel 1 set "BASE_PYTHON=py -3.12"
@@ -138,6 +162,17 @@ if not exist ".venv\Scripts\python.exe" (
     if errorlevel 1 exit /b 1
 )
 set "PYTHON_EXE=%CD%\.venv\Scripts\python.exe"
+exit /b 0
+
+:install_dependencies
+echo Installing Subtitle Generator dependencies...
+echo Python: %PYTHON_EXE%
+call "%PYTHON_EXE%" -m pip --version
+if errorlevel 1 exit /b 1
+call "%PYTHON_EXE%" -m pip install --prefer-binary "setuptools>=69" wheel
+if errorlevel 1 exit /b 1
+call "%PYTHON_EXE%" -m pip install --no-build-isolation --prefer-binary -e ".[ui,translate,test]"
+if errorlevel 1 exit /b 1
 exit /b 0
 
 :failed
