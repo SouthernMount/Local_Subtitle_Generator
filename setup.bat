@@ -63,7 +63,7 @@ if errorlevel 1 goto :failed
 echo.
 echo ============================================
 echo Setup complete.
-echo Double-click launch.bat or 启动字幕生成器.bat to start.
+echo Double-click launch.bat to start.
 echo You can download or use medium later from the UI or CLI.
 echo ============================================
 pause

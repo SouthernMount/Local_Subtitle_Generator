@@ -15,7 +15,7 @@
 1. 安装 Miniconda/Anaconda，或安装 Python 3.12+。
 2. 下载或克隆本项目。
 3. 双击 `setup.bat`。
-4. 双击 `launch.bat` 或 `启动字幕生成器.bat`。
+4. 双击 `launch.bat`。
 
 `setup.bat` 会优先使用已有的 Conda 安装。如果没有可用 Conda，它会改为
 在项目目录内创建 `.venv` 本地虚拟环境。模型缓存默认放在
@@ -237,7 +237,7 @@ during development.
 1. Install either Miniconda/Anaconda or Python 3.12+.
 2. Download or clone this project.
 3. Double-click `setup.bat`.
-4. Double-click `launch.bat` or `启动字幕生成器.bat`.
+4. Double-click `launch.bat`.
 
 `setup.bat` prefers an existing Conda installation. If Conda is not available,
 it creates a project-local `.venv` instead. Model cache files default to
