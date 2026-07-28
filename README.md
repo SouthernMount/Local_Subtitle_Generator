@@ -195,8 +195,6 @@ subgen sample.mp4 --device cuda --compute-type float16
 subgen sample.mp4 --device cuda --compute-type int8_float16
 ```
 
-使用 GPU 模式前，请先安装与你的 CUDA 版本匹配的 PyTorch。
-
 ## 常见问题
 
 - 如果安装脚本提示缺少 Conda，可以安装 Miniconda，或安装 Python 3.12+
@@ -425,8 +423,6 @@ python -c "from faster_whisper import WhisperModel; WhisperModel('small', device
 subgen sample.mp4 --device cuda --compute-type float16
 subgen sample.mp4 --device cuda --compute-type int8_float16
 ```
-
-Install the PyTorch build that matches your CUDA version before using GPU mode.
 
 ## Troubleshooting
 
