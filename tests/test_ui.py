@@ -18,7 +18,7 @@ def test_apply_selected_transcription_preset_updates_visible_params() -> None:
     _apply_selected_transcription_preset(session_state)
 
     assert session_state["beam_size_input"] == 10
-    assert session_state["best_of_input"] == 10
+    assert session_state["best_of_input"] == 5
     assert session_state["vad_filter_checkbox"] is True
 
 
@@ -35,6 +35,21 @@ def test_fast_transcription_preset_updates_visible_params() -> None:
     assert session_state["beam_size_input"] == 1
     assert session_state["best_of_input"] == 1
     assert session_state["vad_filter_checkbox"] is False
+
+
+def test_noisy_transcription_preset_updates_visible_params() -> None:
+    session_state = {
+        "preset_select": "noisy",
+        "beam_size_input": 10,
+        "best_of_input": 1,
+        "vad_filter_checkbox": False,
+    }
+
+    _apply_selected_transcription_preset(session_state)
+
+    assert session_state["beam_size_input"] == 5
+    assert session_state["best_of_input"] == 5
+    assert session_state["vad_filter_checkbox"] is True
 
 
 def test_manual_transcription_param_change_marks_preset_custom() -> None:

@@ -4,7 +4,6 @@ setlocal EnableExtensions
 cd /d "%~dp0"
 
 set "CONDA_ENV=subgen"
-set "HF_HOME=%CD%\.cache\huggingface"
 set "CONDA_PKGS_DIRS=%CD%\.conda\pkgs"
 set "CONDA_ENVS_PATH=%CD%\.conda\envs"
 set "CONDA_NOTICES=false"
@@ -14,7 +13,7 @@ echo ============================================
 echo   Subtitle Generator - first-time setup
 echo ============================================
 echo Project: %CD%
-echo Model cache: %HF_HOME%
+echo Model cache: resolved automatically (project .cache or %%USERPROFILE%%\.cache)
 echo.
 
 call :find_conda
@@ -51,9 +50,12 @@ if errorlevel 1 (
 if errorlevel 1 goto :failed
 
 echo.
-echo Preparing translation model...
-call "%PYTHON_EXE%" scripts\download_models.py
-if errorlevel 1 goto :failed
+echo Checking local translation model...
+call "%PYTHON_EXE%" -c "from subgen.translate import verify_translation_model; print('Translation model:', verify_translation_model())"
+if errorlevel 1 (
+    echo [WARN] GGUF translation model not found.
+    echo [WARN] Put a .gguf file under models\qwen2.5-7b-instruct-q4_k_m\ or pass --translation-model later.
+)
 
 echo.
 echo Preparing default Whisper model: small
@@ -171,6 +173,14 @@ call "%PYTHON_EXE%" -m pip --version
 if errorlevel 1 exit /b 1
 call "%PYTHON_EXE%" -m pip install --prefer-binary "setuptools>=69" wheel
 if errorlevel 1 exit /b 1
+rem llama.cpp has no reliable prebuilt Windows wheel on PyPI; install the bundled one first.
+if exist "models\runtime\llama_cpp_python-*.whl" (
+    for %%w in ("models\runtime\llama_cpp_python-*.whl") do (
+        echo Installing llama.cpp wheel: %%~nxw
+        call "%PYTHON_EXE%" -m pip install --no-deps "%%~fw"
+    )
+    call "%PYTHON_EXE%" -m pip install "diskcache>=5.6" "jinja2>=3.1"
+)
 call "%PYTHON_EXE%" -m pip install --no-build-isolation --prefer-binary -e ".[ui,translate,test]"
 if errorlevel 1 exit /b 1
 exit /b 0

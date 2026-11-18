@@ -4,12 +4,12 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "subgen"
-version = "0.1.0"
+version = "0.5.0"
 description = "Local video/audio to SRT and VTT subtitle CLI powered by faster-whisper."
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "faster-whisper>=1.0,<2.0",
+    "faster-whisper>=1.2,<2.0",
     "protobuf>=3.20,<6.0",
     "rich>=13.7,<14.0",
     "typer[all]>=0.12,<1.0",
@@ -23,15 +23,11 @@ ui = [
     "streamlit>=1.37,<2.0",
 ]
 translate = [
-    "sentencepiece>=0.2,<1.0",
-    "torch>=2.2,<3.0",
-    "transformers>=4.40,<5.0",
+    "llama-cpp-python>=0.3.4,<0.4",
 ]
 all = [
-    "sentencepiece>=0.2,<1.0",
+    "llama-cpp-python>=0.3.4,<0.4",
     "streamlit>=1.37,<2.0",
-    "torch>=2.2,<3.0",
-    "transformers>=4.40,<5.0",
 ]
 
 [project.scripts]

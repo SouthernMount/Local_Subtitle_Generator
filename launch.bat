@@ -5,14 +5,13 @@ cd /d "%~dp0"
 
 set "CONDA_ENV=subgen"
 set "SUBGEN_URL=http://localhost:8501"
-set "HF_HOME=%CD%\.cache\huggingface"
 set "CONDA_PKGS_DIRS=%CD%\.conda\pkgs"
 set "CONDA_ENVS_PATH=%CD%\.conda\envs"
 set "CONDA_NOTICES=false"
 
 echo Starting local Subtitle Generator...
 echo URL: %SUBGEN_URL%
-echo Model cache: %HF_HOME%
+echo Model cache: resolved automatically (project .cache or %%USERPROFILE%%\.cache)
 echo.
 
 call :find_python

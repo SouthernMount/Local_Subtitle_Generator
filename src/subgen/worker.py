@@ -6,11 +6,12 @@ from pathlib import Path
 from time import time
 
 from .cli import SubtitleFormat, generate_subtitles
+from .glossary import collect_glossary
 from .transcribe import TranscriptionError, download_model
 from .translate import (
     DEFAULT_TRANSLATION_MODEL,
     TranslationError,
-    download_translation_model,
+    verify_translation_model,
 )
 
 
@@ -26,17 +27,25 @@ def main() -> None:
     generate_parser.add_argument("--output-dir", type=Path)
     generate_parser.add_argument("--format", choices=[item.value for item in SubtitleFormat], default="both")
     generate_parser.add_argument("--language", default="auto")
-    generate_parser.add_argument("--model", default="small")
-    generate_parser.add_argument("--device", default="cpu")
-    generate_parser.add_argument("--compute-type", default="default")
+    generate_parser.add_argument("--model", default="auto")
+    generate_parser.add_argument("--device", default="auto")
+    generate_parser.add_argument("--compute-type", default="auto")
     generate_parser.add_argument("--translation-model", default=DEFAULT_TRANSLATION_MODEL)
     generate_parser.add_argument("--overwrite", action="store_true")
-    # --- 新增高级参数 ---
-    generate_parser.add_argument("--preset", choices=["accurate", "default", "fast"], default=None)
+    # --- 高级参数 ---
+    generate_parser.add_argument("--preset", choices=["ja", "noisy", "accurate", "default", "fast"], default=None)
     generate_parser.add_argument("--beam-size", type=int, default=None)
     generate_parser.add_argument("--best-of", type=int, default=None)
     generate_parser.add_argument("--no-vad", action="store_true")
     generate_parser.add_argument("--initial-prompt", default=None)
+    generate_parser.add_argument("--hotwords", default=None)
+    generate_parser.add_argument("--glossary", default=None)
+    generate_parser.add_argument("--glossary-file", type=Path, default=None)
+    generate_parser.add_argument("--rename", default=None)
+    generate_parser.add_argument("--debug-originals", action="store_true")
+    generate_parser.add_argument("--debug-dir", type=Path, default=None)
+    generate_parser.add_argument("--offline", action="store_true")
+    generate_parser.add_argument("--batch-size", type=int, default=1)
 
     download_parser = subparsers.add_parser("download")
     download_parser.add_argument("--model", default="small")
@@ -72,6 +81,13 @@ def main() -> None:
                 best_of=args.best_of,
                 vad_filter=False if args.no_vad else None,
                 initial_prompt=args.initial_prompt,
+                hotwords=args.hotwords,
+                glossary=collect_glossary(args.glossary, args.glossary_file),
+                rename=args.rename,
+                debug_originals=args.debug_originals,
+                debug_dir=args.debug_dir,
+                offline=args.offline,
+                batch_size=args.batch_size,
             )
             _write_result(args.result_file, ok=True, outputs=[str(path) for path in outputs])
             return
@@ -90,11 +106,7 @@ def main() -> None:
                 compute_type=args.compute_type,
                 progress_callback=progress_callback,
             )
-            download_translation_model(
-                model_name=args.translation_model,
-                device=args.device,
-                progress_callback=progress_callback,
-            )
+            verify_translation_model(args.translation_model)
             progress_callback(
                 {
                     "stage": "complete",
@@ -168,6 +180,7 @@ def _write_progress(progress_file: Path, payload: dict, *, started_at: float) ->
         "elapsed_seconds": payload.get("elapsed_seconds", now - started_at),
         "eta_seconds": payload.get("eta_seconds"),
         "outputs": payload.get("outputs", []),
+        "debug_outputs": payload.get("debug_outputs", []),
         "started_at": started_at,
         "updated_at": now,
     }

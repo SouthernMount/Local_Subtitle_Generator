@@ -12,25 +12,49 @@ from pathlib import Path
 
 if __package__:
     from .cli import SubtitleFormat, generate_subtitles
-    from .transcribe import TranscriptionError, download_model
-    from .translate import DEFAULT_TRANSLATION_MODEL, TranslationError, download_translation_model
+    from .transcribe import (
+        TranscriptionError,
+        cuda_device_count,
+        download_model,
+        resolve_default_model,
+    )
+    from .translate import DEFAULT_TRANSLATION_MODEL, TranslationError
 else:
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
     from subgen.cli import SubtitleFormat, generate_subtitles
-    from subgen.transcribe import TranscriptionError, download_model
-    from subgen.translate import DEFAULT_TRANSLATION_MODEL, TranslationError, download_translation_model
+    from subgen.transcribe import (
+        TranscriptionError,
+        cuda_device_count,
+        download_model,
+        resolve_default_model,
+    )
+    from subgen.translate import DEFAULT_TRANSLATION_MODEL, TranslationError
 
+
+WHISPER_MODEL_OPTIONS = [
+    "auto",
+    "large-v3",
+    "large-v3-turbo",
+    "medium",
+    "small",
+    "base",
+    "tiny",
+]
 
 TRANSCRIPTION_PRESET_UI_PARAMS = {
     None: {"beam_size": 5, "best_of": 5, "vad_filter": True},
-    "accurate": {"beam_size": 10, "best_of": 10, "vad_filter": True},
+    "ja": {"beam_size": 5, "best_of": 5, "vad_filter": True},
+    "noisy": {"beam_size": 5, "best_of": 5, "vad_filter": True},
+    "accurate": {"beam_size": 10, "best_of": 5, "vad_filter": True},
     "default": {"beam_size": 5, "best_of": 5, "vad_filter": True},
     "fast": {"beam_size": 1, "best_of": 1, "vad_filter": False},
 }
 
 TRANSCRIPTION_PRESET_LABELS = {
     None: "自定义（使用下方参数）",
-    "accurate": "高精度 — 适合日语等较难的语言",
+    "ja": "日语优化 — 细 VAD / 词级时间戳 / 防复读（推荐）",
+    "noisy": "嘈杂 / 人声弱 — VAD 更灵敏，背景音大时能多救回一部分内容",
+    "accurate": "高精度 — 更宽 beam，约 2 倍耗时",
     "default": "平衡 — 适合英语/中文等主流语言",
     "fast": "快速 — 牺牲精度换速度",
 }
@@ -38,7 +62,7 @@ TRANSCRIPTION_PRESET_LABELS = {
 
 def _ensure_transcription_param_state(session_state) -> None:
     if "preset_select" not in session_state:
-        session_state["preset_select"] = None
+        session_state["preset_select"] = "ja"
 
     selected_preset = session_state["preset_select"]
     params = TRANSCRIPTION_PRESET_UI_PARAMS.get(selected_preset, TRANSCRIPTION_PRESET_UI_PARAMS[None])
@@ -83,10 +107,16 @@ def render_app() -> None:
         SubtitleFormat.vtt.value: "仅 VTT",
     }
     compute_type_labels = {
-        "default": "自动",
+        "auto": "自动（GPU 用 float16，CPU 用 int8）",
+        "default": "自动（CTranslate2 默认）",
         "float16": "float16（GPU 推荐）",
         "int8_float16": "int8_float16（GPU 省显存）",
         "int8": "int8（CPU 推荐）",
+    }
+    device_labels = {
+        "auto": "自动（有 CUDA 就用 GPU）",
+        "cuda": "CUDA（GPU）",
+        "cpu": "CPU",
     }
 
     st.set_page_config(
@@ -113,35 +143,47 @@ def render_app() -> None:
 
     with st.sidebar:
         st.subheader("参数设置")
+        gpu_count = cuda_device_count()
         model = st.selectbox(
             "识别模型",
-            ["tiny", "base", "small", "medium", "large-v3"],
-            index=2,
+            WHISPER_MODEL_OPTIONS,
+            index=0,
             key="model_select",
+            format_func=lambda value: (
+                f"自动（按设备选择，GPU 下为 {resolve_default_model('auto')}）"
+                if value == "auto"
+                else value
+            ),
+            help="GPU 上 large-v3 的日语准确率远高于 small，显存不够可换 large-v3-turbo。",
         )
         device = st.selectbox(
             "运行设备",
-            ["cpu", "cuda"],
+            ["auto", "cuda", "cpu"],
             index=0,
             key="device_select",
-            format_func=lambda value: value.upper(),
+            format_func=lambda value: device_labels[value],
         )
         compute_type = st.selectbox(
             "计算精度",
-            ["default", "float16", "int8_float16", "int8"],
+            ["auto", "float16", "int8_float16", "int8", "default"],
             index=0,
             key="compute_type_select",
             format_func=lambda value: compute_type_labels[value],
-            help="CUDA 通常选择 float16；显存不足可试 int8_float16；CPU 可用 default 或 int8。",
+            help="CUDA 通常选择 auto（float16）；显存不足可试 int8_float16；CPU 用 auto（int8）。",
         )
+        if gpu_count > 0:
+            st.caption(f"检测到 {gpu_count} 个 CUDA 设备，默认使用 GPU 推理。")
+        else:
+            st.caption("未检测到可用的 CUDA 设备，将使用 CPU 推理（large-v3 会很慢）。")
         if device == "cuda":
             st.info("GPU 模式需要 NVIDIA 显卡、可用 CUDA 驱动，以及支持 CUDA 的 PyTorch/ctranslate2。")
         language = st.selectbox(
             "源语言",
-            ["auto", "zh", "en", "ja", "ko"],
+            ["auto", "ja", "zh", "en", "ko"],
             index=0,
             key="language_select",
             format_func=lambda value: f"{language_labels[value]} ({value})",
+            help="日语素材建议直接选 ja：自动检测偶尔会被片头曲/音乐带偏。",
         )
         subtitle_format = st.radio(
             "字幕格式",
@@ -151,10 +193,13 @@ def render_app() -> None:
             format_func=lambda value: format_labels[value],
         )
         translation_model = st.text_input(
-            "中文翻译模型",
+            "中文翻译模型（本地 GGUF）",
             value=DEFAULT_TRANSLATION_MODEL,
             key="translation_model_text",
-            help="非中文语音会先识别为源语言文本，再用此本地模型翻译为中文。",
+            help=(
+                "非中文语音会先识别为源语言文本，再用这个本地大模型翻译成中文。"
+                "可以填 .gguf 文件，也可以填包含分片的目录。"
+            ),
         )
         overwrite = st.checkbox("覆盖已有字幕文件", value=False, key="overwrite_checkbox")
 
@@ -175,7 +220,6 @@ def render_app() -> None:
                     "beam_size",
                     min_value=1,
                     max_value=20,
-                    value=5,
                     step=1,
                     key="beam_size_input",
                     help="Beam search 宽度。越大越准确但越慢。默认 5，高精度模式 10。",
@@ -187,16 +231,14 @@ def render_app() -> None:
                     "best_of",
                     min_value=1,
                     max_value=20,
-                    value=5,
                     step=1,
                     key="best_of_input",
-                    help="temperature > 0 时的候选数。越大越准确但越慢。默认 5，高精度模式 10。",
+                    help="temperature > 0 时的候选数。只在触发重试时才有效。",
                     on_change=_mark_transcription_preset_custom,
                     args=(st.session_state,),
                 )
             vad_filter = st.checkbox(
                 "启用 VAD 语音活动检测",
-                value=True,
                 key="vad_filter_checkbox",
                 help="用 Silero VAD 模型先过滤静音段，大幅减少 Whisper 的幻觉输出。强烈推荐开启。",
                 on_change=_mark_transcription_preset_custom,
@@ -206,10 +248,59 @@ def render_app() -> None:
                 "initial_prompt（引导文本）",
                 value="",
                 key="initial_prompt_text",
-                placeholder="留空则对日语自动使用内置引导词。手动输入可覆盖默认值。",
-                help="Whisper 会将此文本作为上文来引导识别方向。日语已内置默认引导词。",
+                placeholder="一般留空。请优先使用下方「hotwords」。",
+                help="Whisper 会把它当作上文来引导识别；过长或不自然的提示词会诱发复读和幻觉。",
                 on_change=_mark_transcription_preset_custom,
                 args=(st.session_state,),
+            )
+            hotwords = st.text_input(
+                "hotwords（人名/术语提示）",
+                value="",
+                key="hotwords_text",
+                placeholder="登场人物名, 作品名, 专业术语（逗号分隔）",
+                help="比 initial_prompt 更可控：只作为提示注入，用来稳定专有名词的写法。",
+            )
+            glossary_text = st.text_area(
+                "术语表（一行一条：素材写法=中文）",
+                value="",
+                key="glossary_text",
+                height=96,
+                placeholder="ヒカル=光\nみえ=美惠\n# 以 # 开头的行会被忽略",
+                help=(
+                    "左侧原词会自动加进 hotwords 改善识别，右侧写法会强制统一译文里的译名。"
+                    "虚构人名在百科上查不到，需要手写；一般 5–20 条即可。"
+                ),
+            )
+            rename_text = st.text_input(
+                "译名统一（中文）：旧写法=新写法",
+                value="",
+                key="rename_text",
+                placeholder="希卡尔=光, 美惠=美由纪",
+                help=(
+                    "只改中文，不需要懂日语：先正常跑一遍，看到译文里的名字写法，"
+                    "再把「旧写法=想要的写法」填进来重跑即可。"
+                ),
+            )
+            batch_size = st.number_input(
+                "每批翻译行数",
+                min_value=1,
+                max_value=8,
+                value=1,
+                step=1,
+                key="batch_size_number",
+                help=(
+                    "一次请求翻译多行：相邻台词一起送进去，跨句指代更稳、速度更快；"
+                    "行数对不上时会自动回落成逐句重译。"
+                ),
+            )
+            debug_originals = st.checkbox(
+                "输出诊断文件（原文 SRT / 双语对照 / QA 报告）",
+                value=False,
+                key="debug_originals_checkbox",
+                help=(
+                    "仅用于调参：在输出目录的 debug/ 下额外生成日语原文、双语对照和逐条质检数据。"
+                    "正式交付时保持关闭。"
+                ),
             )
 
         st.divider()
@@ -246,7 +337,7 @@ def render_app() -> None:
     action_col, model_col = st.columns([1, 1])
 
     with model_col:
-        if st.button("下载识别和翻译模型", use_container_width=True, key="download_models_button"):
+        if st.button("准备识别模型 / 检查翻译模型", use_container_width=True, key="download_models_button"):
             with st.status("正在准备模型", expanded=True) as status:
                 progress_bar = st.progress(0)
                 progress_detail = st.empty()
@@ -322,6 +413,16 @@ def render_app() -> None:
             worker_args.append("--no-vad")
         if initial_prompt.strip():
             worker_args.extend(["--initial-prompt", initial_prompt.strip()])
+        if hotwords.strip():
+            worker_args.extend(["--hotwords", hotwords.strip()])
+        if glossary_text.strip():
+            worker_args.extend(["--glossary", glossary_text.strip()])
+        if rename_text.strip():
+            worker_args.extend(["--rename", rename_text.strip()])
+        if batch_size > 1:
+            worker_args.extend(["--batch-size", str(int(batch_size))])
+        if debug_originals:
+            worker_args.append("--debug-originals")
 
         worker_result = _run_worker(
             worker_args,
@@ -389,32 +490,21 @@ def _to_chinese_error(exc: Exception) -> str:
         "Input path is not a file:": "输入路径不是文件：",
         "Output file already exists:": "输出文件已存在：",
         "Pass --overwrite to replace it.": "请勾选“覆盖已有字幕文件”后重试。",
+        "Glossary file does not exist:": "术语表文件不存在：",
         "Media file path is required.": "请填写媒体文件路径。",
         "Missing dependency 'faster-whisper'.": "缺少依赖 faster-whisper。",
-        "Missing translation dependencies.": "缺少本地翻译依赖。",
         "Transcription failed.": "语音识别失败。",
-        "Translation failed.": "中文翻译失败。",
         "Model download or load failed.": "识别模型下载或加载失败。",
-        "Translation model download or load failed.": "中文翻译模型下载或加载失败。",
-        "CUDA was selected, but PyTorch cannot access a CUDA GPU.": (
-            "已选择 CUDA，但 PyTorch 无法访问 CUDA GPU。请检查显卡驱动、CUDA 版 PyTorch 和当前虚拟环境。"
-        ),
-        "Source language was not detected, so it cannot be translated to Chinese.": (
-            "未检测到源语言，因此无法翻译为中文。"
-        ),
-        "Unsupported source language for Chinese translation:": "暂不支持翻译为中文的源语言：",
         "Check your network, model name, local cache, and selected device.": (
             "请检查网络、模型名称、本地缓存和运行设备。"
         ),
         "Check your network, model name, and local cache.": (
             "请检查网络、模型名称和本地缓存。"
         ),
-        "Check the source language, translation model, local cache, and selected device.": (
-            "请检查源语言、翻译模型、本地缓存和运行设备。"
-        ),
         "Check that the media file is readable, the model can be downloaded or loaded locally, and the selected device is available.": (
             "请确认媒体文件可读取，识别模型可下载或已存在于本地缓存，并且所选运行设备可用。"
         ),
+        "Cause: ": "原因：",
     }
     for source, target in replacements.items():
         message = message.replace(source, target)
